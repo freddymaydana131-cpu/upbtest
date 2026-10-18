@@ -35,3 +35,13 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 # upbtest
+
+## Conexión con la API
+
+El catálogo y los pedidos consumen el backend mediante `NEXT_PUBLIC_API_URL`. Para desarrollo local, copia `.env.example` a `.env.local` y deja el valor `http://localhost:3000`. El backend escucha en el puerto `3000`; ejecuta Next.js en el `3001` para evitar el conflicto:
+
+```bash
+npm run dev -- -p 3001
+```
+
+La aplicación usa exportación estática para Firebase Hosting. Por eso `NEXT_PUBLIC_API_URL` se fija al compilar y también debe configurarse como **Repository variable** con ese nombre en GitHub para que los workflows de Firebase la incluyan en `npm run build`. Usa la URL pública de Render, por ejemplo `https://tu-servicio.onrender.com`, sin una barra final. Este valor es público y no debe contener secretos.

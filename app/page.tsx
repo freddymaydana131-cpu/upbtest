@@ -1,26 +1,20 @@
-const drinks = [
-  {
-    number: "01",
-    name: "Latte de la casa",
-    description: "Espresso, leche cremosa y un ratito para ti.",
-    price: "$12.000",
-    tag: "El favorito",
-  },
-  {
-    number: "02",
-    name: "Cold brew",
-    description: "Café de extracción lenta, servido bien frío.",
-    price: "$14.000",
-    tag: "Fresco",
-  },
-  {
-    number: "03",
-    name: "Capuchino",
-    description: "Espresso intenso, espuma suave y cacao.",
-    price: "$13.000",
-    tag: "Clásico",
-  },
-];
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  crearPedido,
+  listarProductos,
+  obtenerPedido,
+  type Pedido,
+  type Producto,
+} from "../lib/api";
+
+const formatPrice = (price: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(price);
 
 function CoffeeIllustration() {
   return (
@@ -91,6 +85,106 @@ function CoffeeIllustration() {
 }
 
 export default function Home() {
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [errorCatalogo, setErrorCatalogo] = useState("");
+  const [carrito, setCarrito] = useState<Record<number, { producto: Producto; cantidad: number }>>({});
+  const [creandoPedido, setCreandoPedido] = useState(false);
+  const [consultandoPedido, setConsultandoPedido] = useState(false);
+  const [pedido, setPedido] = useState<Pedido | null>(null);
+  const [errorPedido, setErrorPedido] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    listarProductos(busqueda, controller.signal)
+      .then(setProductos)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setErrorCatalogo(
+            error instanceof Error ? error.message : "No se pudo cargar el catálogo.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCargandoCatalogo(false);
+      });
+
+    return () => controller.abort();
+  }, [busqueda]);
+
+  const itemsCarrito = Object.values(carrito);
+  const cantidadEnCarrito = itemsCarrito.reduce((total, item) => total + item.cantidad, 0);
+  const totalCarrito = itemsCarrito.reduce(
+    (total, item) => total + item.producto.precio * item.cantidad,
+    0,
+  );
+
+  const cambiarCantidad = (producto: Producto, cambio: number) => {
+    setCarrito((actual) => {
+      const actualCantidad = actual[producto.id]?.cantidad ?? 0;
+      const nuevaCantidad = Math.min(actualCantidad + cambio, producto.stock);
+      const siguiente = { ...actual };
+
+      if (nuevaCantidad <= 0) {
+        delete siguiente[producto.id];
+      } else {
+        siguiente[producto.id] = { producto, cantidad: nuevaCantidad };
+      }
+
+      return siguiente;
+    });
+  };
+
+  const confirmarPedido = async () => {
+    setCreandoPedido(true);
+    setErrorPedido("");
+
+    try {
+      const nuevoPedido = await crearPedido(
+        itemsCarrito.map(({ producto, cantidad }) => ({
+          idProducto: producto.id,
+          cantidad,
+        })),
+      );
+      setPedido(nuevoPedido);
+      setCarrito({});
+      setProductos((actuales) =>
+        actuales.map((producto) => {
+          const itemPedido = nuevoPedido.productos.find(
+            (item) => item.idProducto === producto.id,
+          );
+          return itemPedido
+            ? { ...producto, stock: Math.max(0, producto.stock - itemPedido.cantidad) }
+            : producto;
+        }),
+      );
+    } catch (error) {
+      setErrorPedido(
+        error instanceof Error ? error.message : "No se pudo crear el pedido.",
+      );
+    } finally {
+      setCreandoPedido(false);
+    }
+  };
+
+  const consultarPedido = async () => {
+    if (!pedido) return;
+    setConsultandoPedido(true);
+    setErrorPedido("");
+
+    try {
+      setPedido(await obtenerPedido(pedido.id));
+    } catch (error) {
+      setErrorPedido(
+        error instanceof Error ? error.message : "No se pudo consultar el pedido.",
+      );
+    } finally {
+      setConsultandoPedido(false);
+    }
+  };
+
   return (
     <>
       <div className="top-note">
@@ -179,32 +273,120 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="menu-grid">
-            {drinks.map((drink) => (
-              <article className="drink-card" key={drink.number}>
-                <div className="drink-card-top">
-                  <span className="drink-number">{drink.number}</span>
-                  <span className="drink-tag">{drink.tag}</span>
-                </div>
-                <div className={`drink-art drink-art-${drink.number}`}>
-                  <span className="drink-cup" aria-hidden="true">
-                    <span className="cup-coffee" />
-                    <span className="cup-handle" />
-                  </span>
-                  <span className="drink-sparkle" aria-hidden="true">
-                    ✳
-                  </span>
-                </div>
-                <div className="drink-info">
-                  <div>
-                    <h3>{drink.name}</h3>
-                    <p>{drink.description}</p>
-                  </div>
-                  <span className="drink-price">{drink.price}</span>
-                </div>
-              </article>
-            ))}
+          <div className="menu-tools">
+            <label className="menu-search">
+              <span>Buscar en el menú</span>
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(event) => {
+                  setCargandoCatalogo(true);
+                  setErrorCatalogo("");
+                  setBusqueda(event.target.value);
+                }}
+                placeholder="Ej. latte"
+              />
+            </label>
+            <p className="menu-feedback" aria-live="polite">
+              {cargandoCatalogo ? "Cargando el menú..." : errorCatalogo}
+            </p>
           </div>
+
+          <div className="menu-grid">
+            {productos.map((producto, index) => {
+              const numero = String(index + 1).padStart(2, "0");
+              const cantidad = carrito[producto.id]?.cantidad ?? 0;
+              return (
+                <article className="drink-card" key={producto.id}>
+                  <div className="drink-card-top">
+                    <span className="drink-number">{numero}</span>
+                    <span className="drink-tag">{producto.etiqueta || "Pausa"}</span>
+                  </div>
+                  <div className={`drink-art drink-art-${numero}`}>
+                    <span className="drink-cup" aria-hidden="true">
+                      <span className="cup-coffee" />
+                      <span className="cup-handle" />
+                    </span>
+                    <span className="drink-sparkle" aria-hidden="true">
+                      ✳
+                    </span>
+                  </div>
+                  <div className="drink-info">
+                    <div>
+                      <h3>{producto.nombre}</h3>
+                      <p>{producto.descripcion || "Preparado con cariño y sin afán."}</p>
+                    </div>
+                    <span className="drink-price">{formatPrice(producto.precio)}</span>
+                  </div>
+                  <div className="drink-order">
+                    <span>{producto.stock} disponibles</span>
+                    <div className="quantity-control">
+                      <button
+                        type="button"
+                        aria-label={`Quitar una unidad de ${producto.nombre}`}
+                        disabled={cantidad === 0}
+                        onClick={() => cambiarCantidad(producto, -1)}
+                      >
+                        −
+                      </button>
+                      <span aria-live="polite">{cantidad}</span>
+                      <button
+                        type="button"
+                        aria-label={`Añadir una unidad de ${producto.nombre}`}
+                        disabled={cantidad >= producto.stock}
+                        onClick={() => cambiarCantidad(producto, 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {!cargandoCatalogo && !errorCatalogo && productos.length === 0 && (
+            <p className="menu-feedback">No encontramos productos con esa búsqueda.</p>
+          )}
+
+          <div className="order-panel">
+            <div className="order-summary">
+              <p>{cantidadEnCarrito} productos en tu pedido</p>
+              <strong>{formatPrice(totalCarrito)}</strong>
+            </div>
+            <button
+              className="button button-dark"
+              type="button"
+              disabled={cantidadEnCarrito === 0 || creandoPedido}
+              onClick={confirmarPedido}
+            >
+              {creandoPedido ? "Creando pedido..." : "Confirmar pedido"}
+            </button>
+          </div>
+
+          {errorPedido && <p className="order-error" role="alert">{errorPedido}</p>}
+
+          {pedido && (
+            <div className="order-result" aria-live="polite">
+              <div>
+                <strong>Pedido #{pedido.id} · {pedido.estado}</strong>
+                <p>Total: {formatPrice(pedido.total)}</p>
+                {pedido.productos.map((item) => (
+                  <p key={`${pedido.id}-${item.idProducto}-${item.nombre}`}>
+                    {item.cantidad} × {item.nombre}
+                  </p>
+                ))}
+              </div>
+              <button
+                className="button button-dark"
+                type="button"
+                disabled={consultandoPedido}
+                onClick={consultarPedido}
+              >
+                {consultandoPedido ? "Consultando..." : "Consultar pedido"}
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="closing-section" id="nosotros">
