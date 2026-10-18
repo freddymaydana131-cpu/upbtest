@@ -88,6 +88,8 @@ export default function Home() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [intentosCatalogo, setIntentosCatalogo] = useState(1);
+  const [recargaCatalogo, setRecargaCatalogo] = useState(0);
   const [errorCatalogo, setErrorCatalogo] = useState("");
   const [carrito, setCarrito] = useState<Record<number, { producto: Producto; cantidad: number }>>({});
   const [creandoPedido, setCreandoPedido] = useState(false);
@@ -98,12 +100,18 @@ export default function Home() {
   useEffect(() => {
     const controller = new AbortController();
 
-    listarProductos(busqueda, controller.signal)
+    listarProductos(busqueda, controller.signal, (attempt) => {
+      setIntentosCatalogo(attempt);
+    })
       .then(setProductos)
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
           setErrorCatalogo(
-            error instanceof Error ? error.message : "No se pudo cargar el catálogo.",
+            error instanceof TypeError
+              ? "No se pudo conectar con el catálogo después de varios intentos."
+              : error instanceof Error
+                ? error.message
+                : "No se pudo cargar el catálogo.",
           );
         }
       })
@@ -112,7 +120,7 @@ export default function Home() {
       });
 
     return () => controller.abort();
-  }, [busqueda]);
+  }, [busqueda, recargaCatalogo]);
 
   const itemsCarrito = Object.values(carrito);
   const cantidadEnCarrito = itemsCarrito.reduce((total, item) => total + item.cantidad, 0);
@@ -281,6 +289,7 @@ export default function Home() {
                 value={busqueda}
                 onChange={(event) => {
                   setCargandoCatalogo(true);
+                  setIntentosCatalogo(1);
                   setErrorCatalogo("");
                   setBusqueda(event.target.value);
                 }}
@@ -288,8 +297,26 @@ export default function Home() {
               />
             </label>
             <p className="menu-feedback" aria-live="polite">
-              {cargandoCatalogo ? "Cargando el menú..." : errorCatalogo}
+              {cargandoCatalogo
+                ? intentosCatalogo > 1
+                  ? `Conectando... (intento ${intentosCatalogo} de 8)`
+                  : "Conectando..."
+                : errorCatalogo}
             </p>
+            {errorCatalogo && (
+              <button
+                className="menu-retry"
+                type="button"
+                onClick={() => {
+                  setCargandoCatalogo(true);
+                  setIntentosCatalogo(1);
+                  setErrorCatalogo("");
+                  setRecargaCatalogo((actual) => actual + 1);
+                }}
+              >
+                Reintentar conexión
+              </button>
+            )}
           </div>
 
           <div className="menu-grid">

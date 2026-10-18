@@ -382,6 +382,21 @@ a {
   font-size: 11px;
 }
 
+.menu-retry {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--coffee);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.menu-retry:hover {
+  border-color: var(--coffee);
+}
+
 .menu-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -38,7 +38,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Conexión con la API
 
-El catálogo y los pedidos consumen el backend mediante `NEXT_PUBLIC_API_URL`. Para desarrollo local, copia `.env.example` a `.env.local` y deja el valor `http://localhost:3000`. El backend escucha en el puerto `3000`; ejecuta Next.js en el `3001` para evitar el conflicto:
+El catálogo y los pedidos consumen el backend mediante `NEXT_PUBLIC_API_URL`. Para desarrollo local, copia `.env.example` a `.env.local`; el valor inicial apunta al backend de Render. Si ejecutas el backend localmente, cambia el valor a `http://localhost:3000`. El backend escucha en el puerto `3000`; ejecuta Next.js en el `3001` para evitar el conflicto:
 
 ```bash
 npm run dev -- -p 3001
